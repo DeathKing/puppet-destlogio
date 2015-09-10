@@ -1,7 +1,7 @@
 require "puppet/destlogio/version"
 
 module Puppet
-  module Destlogio
+  module DestLogIO
     # Your code goes here...
   end
 end

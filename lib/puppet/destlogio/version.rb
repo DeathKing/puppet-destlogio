@@ -1,5 +1,5 @@
 module Puppet
-  module Destlogio
+  module DestLogIO
     VERSION = "0.1.0"
   end
 end
