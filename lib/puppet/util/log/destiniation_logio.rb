@@ -1,12 +1,16 @@
+
 # Log destination to a log.io server
 # Hard coding for a TCP socket connection, we may refactoring it to a connection pool later to
 # reuse the connection.
 
-require 'socket'
-
 Puppet::Util::Log.newdesttype :logio do
 
+  require 'socket'
+
   attr_accessor :stream, :node
+
+  ENDLINE = "\r\n".freeze
+  NEWLINE = "\n".freeze
 
   DEFAULT_SERVER = "logio".freeze
   DEFAULT_PORT   = 28777
@@ -15,6 +19,8 @@ Puppet::Util::Log.newdesttype :logio do
   @time_format = "%Y-%m-%d %H:%M:%S %z".freeze
 
   class << self
+    attr_reader :time_format
+
     def time_format=(str)
       @time_format = str.dup.freeze
     end
@@ -22,7 +28,7 @@ Puppet::Util::Log.newdesttype :logio do
 
   def initialize
     Puppet.settings.use :agent
-    setup_log Puppet[:logio_stream], Puppet[:logio_node]
+    setup_log(Puppet[:logio_stream], Puppet[:logio_node])
     setup_connection
   end
 
@@ -37,8 +43,8 @@ Puppet::Util::Log.newdesttype :logio do
     @node = node || Puppet[:certname]
   end
 
-  def send_message(msg)
-    @connection.write msg + "\r\n"
+  def send_message(msgstr)
+    @connection.write "#{msgstr}#{ENDLINE}"
   end
 
   def send_log(msg)
@@ -46,25 +52,34 @@ Puppet::Util::Log.newdesttype :logio do
   end
 
   def build_log(msg)
-    escaped_message = escape_message(msg.to_s)
-    timed_message = timestamp_message(escaped_message)
-    "+log|#@stream|#@node|#{msg.level}|#{timed_message}"
+    time = get_log_time(msg)
+    message = filter_message(msg)
+    "+log|#@stream|#@node|#{msg.level}|[#{time}] #{msg.source} #{msg.level}: #{message}"
   end
 
   def handle(msg)
     send_log msg
   end
 
-  def timestamp_message(msg)
-    "[#{Time.now.strftime(@@time_format)}] " + msg
+  def get_log_time(msg)
+    msg.time.strftime(self.class.time_format)
   end
 
-  def escape_message(msg)
-    msg.gsub "\r\n", "\n"
+  # Maybe you wanto filter some message such as password stuff?
+  # This method should have type Puppet::Util::Log -> String
+  def filter_message(msg)
+    msgstr = msg.to_s
+    # all another filter methd should have type String -> String
+    msgstr = escape_message(msgstr)
+    msgstr
+  end
+
+  def escape_message(msgstr)
+    msgstr.gsub(ENDLINE, NEWLINE)
   end
 
   def send_close
-    send_message build_close_message
+    send_message(build_close_message)
   end
 
   def build_close_message
